@@ -67,7 +67,7 @@ _LOGGER: Final = get_logger(__name__)
 CACHE_DATA_MESSAGE_REPLAY_CTX = CachedMessageReplayContext(CacheType.DATA)
 
 # The cache persistence options we support: "disk" or None
-CachePersistType: TypeAlias = Union[Literal["disk"], None]
+CachePersistType: TypeAlias = Union[Literal["redis", "disk"], None]
 
 
 class CachedDataFuncInfo(CachedFuncInfo):
@@ -197,7 +197,7 @@ class DataCaches(CacheStatsProvider):
                 max_entries=max_entries,
                 persist=persist,
             )
-            cache_storage_manager = self.get_storage_manager()
+            cache_storage_manager = self.get_storage_manager(persist)
             storage = cache_storage_manager.create(cache_context)
 
             cache = DataCache(
@@ -264,7 +264,7 @@ class DataCaches(CacheStatsProvider):
             persist=persist,
         )
         try:
-            self.get_storage_manager().check_context(cache_context)
+            self.get_storage_manager(persist).check_context(cache_context)
         except InvalidCacheStorageContext as e:
             _LOGGER.error(
                 "Cache params for function %s are incompatible with current "
@@ -290,9 +290,12 @@ class DataCaches(CacheStatsProvider):
             persist=persist,
         )
 
-    def get_storage_manager(self) -> CacheStorageManager:
+    def get_storage_manager(self, persist=None) -> CacheStorageManager:
         if runtime.exists():
-            return runtime.get_instance().cache_storage_manager
+            if persist == "redis":
+                return runtime.get_instance().redis_cache_storage_manager
+            else:
+                return runtime.get_instance().cache_storage_manager
         else:
             # When running in "raw mode", we can't access the CacheStorageManager,
             # so we're falling back to InMemoryCache.
@@ -548,11 +551,10 @@ class CacheDataAPI:
         else:
             persist_string = persist
 
-        if persist_string not in (None, "disk"):
+        if persist_string not in (None, "disk", "redis"):
             # We'll eventually have more persist options.
             raise StreamlitAPIException(
-                f"Unsupported persist option '{persist}'. Valid values are 'disk' or None."
-            )
+                f"Unsupported persist option '{persist}'. Valid values are 'disk', 'redis', or None.")
 
         self._maybe_show_deprecation_warning()
 

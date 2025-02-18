@@ -108,7 +108,7 @@ class CacheStorageContext:
     function_display_name: str
     ttl_seconds: float | None = None
     max_entries: int | None = None
-    persist: Literal["disk"] | None = None
+    persist: Literal["disk", "redis"] | None = None
 
 
 class CacheStorage(Protocol):
